@@ -1,0 +1,34 @@
+{
+  "channels": [
+    {
+      "slot": 1,
+      "name": "P1",
+      "streamUrl": "https://live1.sr.se/p1-aac-320"
+    },
+    {
+      "slot": 2,
+      "name": "P4 Kristianstad",
+      "streamUrl": "https://live1.sr.se/p4krist-aac-320"
+    },
+    {
+      "slot": 3,
+      "name": "Mix megapol",
+      "streamUrl": "https://live-bauerse-fm.sharp-stream.com/mixmegapol_instream_se_mp3"
+    },
+    {
+      "slot": 4,
+      "name": "rix fm",
+      "streamUrl": "https://fm01-ice.stream.khz.se/fm01_aac"
+    },
+    {
+      "slot": 5,
+      "name": "radio gold",
+      "streamUrl": "https://streaming.943.se/radiogold"
+    },
+    {
+      "slot": 6,
+      "name": "nova 93.7",
+      "streamUrl": "http://playerservices.streamtheworld.com/api/livestream-redirect/NOVA_937_AAC48.aac"
+    }
+  ]
+}

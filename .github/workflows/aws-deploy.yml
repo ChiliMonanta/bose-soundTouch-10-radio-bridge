@@ -1,0 +1,67 @@
+name: Deploy – AWS
+
+# Manual deploy only.
+on:
+  workflow_dispatch:
+
+# Required for OIDC token (no long-lived access keys needed).
+permissions:
+  id-token: write
+  contents: read
+
+# ── Required GitHub Secrets ───────────────────────────────────────────────────
+# AWS_ROLE_ARN  – IAM role to assume via OIDC
+#                 Must have: lambda:*, cloudformation:*, iam:*, s3:*
+#                 Trust policy must allow github.com OIDC provider for this repo.
+jobs:
+  deploy:
+    name: Build & deploy
+    runs-on: ubuntu-latest
+    env:
+      SAM_CLI_TELEMETRY: "0"
+      AWS_REGION: eu-north-1  # Stockholm – lowest latency from Sweden
+
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: "1.26"
+          cache: true
+
+      - name: Authenticate to AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@ff717079ee2060e4bcee96c4779b553acc87447c # v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@f84ec7d548307efafe33230528756de3c5841a17 # v2
+        with:
+          use-installer: true
+
+      # SAM build runs "make build-BridgeFunction" via the root Makefile,
+      # which cross-compiles the Go binary for Linux arm64.
+      - name: SAM build
+        working-directory: infra/aws
+        run: sam build --template-file template.yaml
+
+      # Deploy creates/updates the stack.
+      - name: SAM deploy
+        working-directory: infra/aws
+        run: |
+          sam deploy \
+            --stack-name bose-bridge \
+            --capabilities CAPABILITY_IAM \
+            --no-confirm-changeset \
+            --no-fail-on-empty-changeset \
+            --resolve-s3 \
+            --region ${{ env.AWS_REGION }}
+
+      - name: Print Function URL
+        run: |
+          FUNCTION_URL=$(aws cloudformation describe-stacks \
+            --stack-name bose-bridge \
+            --query "Stacks[0].Outputs[?OutputKey=='FunctionURL'].OutputValue" \
+            --output text)
+          printf '%s\n' "$FUNCTION_URL"

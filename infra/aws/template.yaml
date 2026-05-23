@@ -1,0 +1,55 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: Bose SoundTouch bridge server
+
+# ── Globals ───────────────────────────────────────────────────────────────────
+Globals:
+  Function:
+    Timeout: 10
+    MemorySize: 256        # increased from 128 for better performance; still free tier
+    LoggingConfig:
+      LogFormat: JSON      # structured logs
+
+# ── Resources ─────────────────────────────────────────────────────────────────
+Resources:
+  BridgeFunction:
+    Type: AWS::Serverless::Function
+    Metadata:
+      # SAM runs "make build-BridgeFunction" in the CodeUri directory.
+      # The root Makefile builds the Go binary and places it at ARTIFACTS_DIR/bootstrap.
+      BuildMethod: makefile
+    Properties:
+      Runtime: provided.al2023
+      Architectures:
+        - arm64          # Graviton2 – cheaper and faster than x86_64
+      Handler: bootstrap # required for provided.al2023
+      CodeUri: ../../    # repo root, where go.mod and Makefile live
+      LoggingConfig:
+        LogGroup: !Ref BridgeFunctionLogGroup
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - "*"
+
+  BridgeFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}-BridgeFunction"
+      RetentionInDays: 7   # 7 days = minimal cost, adjust if needed
+
+# ── Outputs ───────────────────────────────────────────────────────────────────
+Outputs:
+  FunctionURL:
+    Description: >
+      Public HTTPS endpoint for the bridge server.
+    Value: !GetAtt BridgeFunctionUrl.FunctionUrl
+
+  CheckHealth:
+    Description: Health check
+    Value: !Sub |
+      printf "curl ${BridgeFunctionUrl.FunctionUrl}healthz"
+
+  SetupCommands:
+    Description: ETAP commands to configure the speaker (run once after deploy)
+    Value: !Sub "printf \"sys configuration margeServerUrl ${BridgeFunctionUrl.FunctionUrl}marge\\r\\n\" | nc -w3 SPEAKER_IP 17000 && printf \"sys configuration bmxRegistryUrl ${BridgeFunctionUrl.FunctionUrl}bmx/registry/v1/services\\r\\n\" | nc -w3 SPEAKER_IP 17000 && printf \"envswitch boseurls set ${BridgeFunctionUrl.FunctionUrl} ${BridgeFunctionUrl.FunctionUrl}\\r\\n\" | nc -w3 SPEAKER_IP 17000 && printf \"sys reboot\\r\\n\" | nc -w3 SPEAKER_IP 17000"

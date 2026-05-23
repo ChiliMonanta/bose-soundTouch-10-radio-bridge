@@ -1,0 +1,20 @@
+# macOS
+.DS_Store
+
+# Go build artifacts
+dist/
+*.exe
+*.test
+*.out
+
+# AWS SAM build output
+infra/aws/.aws-sam/
+
+# Runtime/log output
+logs/
+
+# Local env and temp files
+.env
+.env.*
+*.tmp
+*.swp
