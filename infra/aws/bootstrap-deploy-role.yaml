@@ -1,0 +1,136 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Bootstrap IAM role and policy for GitHub Actions SAM deployments (Bose)
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Description: GitHub organization or user name
+
+  GitHubRepo:
+    Type: String
+    Description: GitHub repository name
+
+  RoleName:
+    Type: String
+    Description: IAM role assumed by GitHub Actions via OIDC
+
+  ManagedPolicyName:
+    Type: String
+    Description: Managed policy name attached to deploy role
+
+Resources:
+  GitHubActionsSamDeployPolicy:
+    Type: AWS::IAM::ManagedPolicy
+    Properties:
+      ManagedPolicyName: !Ref ManagedPolicyName
+      Description: Permissions for GitHub Actions SAM deploy workflow
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: CloudWatchLogsPermissions
+            Effect: Allow
+            Action:
+              - logs:CreateLogGroup
+              - logs:DeleteLogGroup
+              - logs:DescribeLogGroups
+              - logs:PutRetentionPolicy
+              - logs:TagResource
+              - logs:FilterLogEvents
+            Resource: !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/*
+
+          - Sid: LambdaAndUrlPermissions
+            Effect: Allow
+            Action:
+              - lambda:CreateFunction
+              - lambda:DeleteFunction
+              - lambda:GetFunction
+              - lambda:UpdateFunctionCode
+              - lambda:UpdateFunctionConfiguration
+              - lambda:CreateFunctionUrlConfig
+              - lambda:DeleteFunctionUrlConfig
+              - lambda:GetFunctionUrlConfig
+              - lambda:UpdateFunctionUrlConfig
+              - lambda:AddPermission
+              - lambda:RemovePermission
+              - lambda:TagResource
+            Resource: !Sub arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:*
+
+          - Sid: CloudFormationPermissions
+            Effect: Allow
+            Action:
+              - cloudformation:CreateChangeSet
+              - cloudformation:ExecuteChangeSet
+              - cloudformation:DescribeChangeSet
+              - cloudformation:DeleteChangeSet
+              - cloudformation:DescribeStacks
+              - cloudformation:DescribeStackEvents
+              - cloudformation:DescribeStackResources
+              - cloudformation:GetTemplate
+              - cloudformation:UpdateStack
+              - cloudformation:CreateStack
+              - cloudformation:DeleteStack
+              - cloudformation:GetTemplateSummary
+            Resource:
+              - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/bose-bridge/*
+              - !Sub arn:aws:cloudformation:${AWS::Region}:${AWS::AccountId}:stack/aws-sam-cli-managed-default/*
+              - !Sub arn:aws:cloudformation:${AWS::Region}:aws:transform/Serverless-2016-10-31
+
+          - Sid: S3DeploymentBucketPermissions
+            Effect: Allow
+            Action:
+              - s3:CreateBucket
+              - s3:GetBucketLocation
+              - s3:ListBucket
+            Resource: arn:aws:s3:::aws-sam-cli-managed-default-*
+
+          - Sid: S3DeploymentObjectPermissions
+            Effect: Allow
+            Action:
+              - s3:PutObject
+              - s3:GetObject
+            Resource: arn:aws:s3:::aws-sam-cli-managed-default-*/*
+
+          - Sid: IAMRoleCreationForLambda
+            Effect: Allow
+            Action:
+              - iam:CreateRole
+              - iam:DeleteRole
+              - iam:GetRole
+              - iam:PutRolePolicy
+              - iam:DeleteRolePolicy
+              - iam:GetRolePolicy
+              - iam:AttachRolePolicy
+              - iam:DetachRolePolicy
+              - iam:PassRole
+              - iam:TagRole
+            Resource: !Sub arn:aws:iam::${AWS::AccountId}:role/bose-bridge-*
+
+  GitHubActionsSamDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Ref RoleName
+      Description: Bose deploy role
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:aws:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/${GitHubRepo}:*
+      ManagedPolicyArns:
+        - !Ref GitHubActionsSamDeployPolicy
+
+Outputs:
+  DeployRoleArn:
+    Description: ARN of the GitHub Actions deploy role
+    Value: !GetAtt GitHubActionsSamDeployRole.Arn
+
+  ManagedPolicyArn:
+    Description: ARN of the managed policy attached to the role
+    Value: !Ref GitHubActionsSamDeployPolicy
