@@ -165,7 +165,7 @@ Fork path (GitHub Actions):
    `https://github.com/<owner>/<repo>/fork`
 2. Add required GitHub secrets in your fork.
 3. Run the deploy workflow (`workflow_dispatch`) in Actions.
-4. Copy the Function URL from the workflow log output.
+4. Configure the speaker directly with `make configure-speaker SPEAKER_IP=192.168.1.XXX`.
 
 GitHub Secrets that must be set:
 
@@ -179,13 +179,16 @@ export AWS_REGION=eu-north-1
 export STACK_NAME=bose-bridge
 
 make deploy
-make print-function-url
+make configure-speaker SPEAKER_IP=192.168.1.XXX
 ```
 
 First deployment:
   1. Deploy using either Option A or Option B above.
-  2. Copy Function URL from workflow logs or `make print-function-url` output.
-  3. Use its host and port in the ETAP commands below.
+  2. Configure the speaker directly:
+
+```sh
+make configure-speaker SPEAKER_IP=192.168.1.XXX
+```
 
 Note:
   - AWS deploy is optional.
@@ -285,6 +288,16 @@ curl http://$SPEAKER_IP:8090/now_playing
 
 1. Configure server endpoints once:
 
+If using AWS Lambda (deployed stack):
+
+```sh
+make configure-speaker SPEAKER_IP=$SPEAKER_IP
+```
+
+This fetches the Lambda URL internally and sends all ETAP commands in one step.
+
+If using a local/LAN bridge instead:
+
 ```sh
 printf "sys configuration margeServerUrl http://$BRIDGE_HOSTPORT/marge\r\n" \
   | nc -w3 "$SPEAKER_IP" 17000
@@ -321,9 +334,6 @@ Notes:
 - In the working flow, `margeAccountUUID` is assigned automatically during boot.
 - No manual `setMargeAccount` step is required once `margeServerUrl` and `bmxRegistryUrl` are correct.
 - If `LOCAL_INTERNET_RADIO` does not appear immediately after changing URLs, reboot the speaker again and re-check `/info` and `/sources`.
-
-The SAM template also outputs the ETAP server configuration commands
-as CloudFormation output after deployment.
 
 ## 9. Radio Channels
 

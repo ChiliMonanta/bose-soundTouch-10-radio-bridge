@@ -11,7 +11,7 @@ CGO_ENABLED_TARGET ?= 0
 AWS_REGION ?= eu-north-1
 STACK_NAME ?= bose-bridge
 
-.PHONY: help build build-local test lint fmt-check fix run-local sam-build deploy print-function-url clean build-BridgeFunction
+.PHONY: help build build-local test lint fmt-check fix run-local sam-build deploy destroy configure-speaker clean build-BridgeFunction
 
 help:
 	@echo "Targets:"
@@ -23,7 +23,8 @@ help:
 	@echo "  make run-local     Run server locally"
 	@echo "  make sam-build     Run SAM build in infra/aws"
 	@echo "  make deploy        Deploy stack manually via SAM"
-	@echo "  make print-function-url  Print FunctionURL output from CloudFormation"
+	@echo "  make destroy       Destroy stack manually via SAM"
+	@echo "  make configure-speaker SPEAKER_IP=<ip>  Configure speaker via ETAP using deployed Lambda URL"
 	@echo "  make clean         Remove local build artifacts"
 	@echo "  make build         Alias for build-local"
 
@@ -75,12 +76,38 @@ deploy:
 		--resolve-s3 \
 		--region "$(AWS_REGION)"
 
-print-function-url:
-	aws cloudformation describe-stacks \
+destroy:
+	cd infra/aws && sam delete \
 		--stack-name "$(STACK_NAME)" \
 		--region "$(AWS_REGION)" \
-		--query "Stacks[0].Outputs[?OutputKey=='FunctionURL'].OutputValue" \
-		--output text
+		--no-prompts
+
+configure-speaker:
+	@if [ -z "$(SPEAKER_IP)" ]; then \
+		echo "Error: SPEAKER_IP is required, e.g.: make configure-speaker SPEAKER_IP=192.168.1.xxx"; \
+		exit 1; \
+	fi
+	echo "Get bridge_url"; \
+	@function_name="$$(aws cloudformation describe-stack-resource \
+		--stack-name "$(STACK_NAME)" \
+		--region "$(AWS_REGION)" \
+		--logical-resource-id BridgeFunction \
+		--query "StackResourceDetail.PhysicalResourceId" \
+		--output text)"; \
+	bridge_url="$$(aws lambda get-function-url-config \
+		--function-name "$$function_name" \
+		--region "$(AWS_REGION)" \
+		--query "FunctionUrl" \
+		--output text | sed 's|/$$||')"; \
+	echo "Set margeServerUrl"; \
+	printf "sys configuration margeServerUrl $${bridge_url}/marge\r\n" | nc -w3 "$(SPEAKER_IP)" 17000; \
+	echo "Set bmxRegistryUrl"; \
+	printf "sys configuration bmxRegistryUrl $${bridge_url}/bmx/registry/v1/services\r\n" | nc -w3 "$(SPEAKER_IP)" 17000; \
+	echo "Set envswitchs"; \
+	printf "envswitch boseurls set $${bridge_url} $${bridge_url}\r\n" | nc -w3 "$(SPEAKER_IP)" 17000; \
+	echo "Reboot"; \
+	printf "sys reboot\r\n" | nc -w3 "$(SPEAKER_IP)" 17000; \
+	echo "Speaker configured and rebooting."
 
 clean:
 	rm -rf "$(OUT_DIR)"

@@ -56,12 +56,5 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset \
             --resolve-s3 \
-            --region ${{ env.AWS_REGION }}
+            --region ${{ env.AWS_REGION }} \
 
-      - name: Print Function URL
-        run: |
-          FUNCTION_URL=$(aws cloudformation describe-stacks \
-            --stack-name bose-bridge \
-            --query "Stacks[0].Outputs[?OutputKey=='FunctionURL'].OutputValue" \
-            --output text)
-          printf '%s\n' "$FUNCTION_URL"
