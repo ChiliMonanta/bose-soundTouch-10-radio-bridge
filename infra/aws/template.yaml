@@ -20,6 +20,7 @@ Resources:
       BuildMethod: makefile
     Properties:
       Runtime: provided.al2023
+      FunctionName: !Sub "${AWS::StackName}"
       Architectures:
         - arm64          # Graviton2 – cheaper and faster than x86_64
       Handler: bootstrap # required for provided.al2023
@@ -35,6 +36,6 @@ Resources:
   BridgeFunctionLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
-      LogGroupName: !Sub "/aws/lambda/${BridgeFunction}"
+      LogGroupName: !Sub "/aws/lambda/${AWS::StackName}"
       RetentionInDays: 3   # 7 days = minimal cost, adjust if needed
 
