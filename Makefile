@@ -88,7 +88,7 @@ configure-speaker:
 		exit 1; \
 	fi
 	echo "Get bridge_url"; \
-	@function_name="$$(aws cloudformation describe-stack-resource \
+	function_name="$$(aws cloudformation describe-stack-resource \
 		--stack-name "$(STACK_NAME)" \
 		--region "$(AWS_REGION)" \
 		--logical-resource-id BridgeFunction \
