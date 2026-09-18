@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -162,11 +163,7 @@ func requestFromLambdaEvent(ctx context.Context, event events.APIGatewayV2HTTPRe
 	if path == "" {
 		path = "/"
 	}
-
-	target := path
-	if event.RawQueryString != "" {
-		target += "?" + event.RawQueryString
-	}
+	path = collapseSlashes(path)
 
 	bodyBytes := []byte(event.Body)
 	if event.IsBase64Encoded {
@@ -177,9 +174,18 @@ func requestFromLambdaEvent(ctx context.Context, event events.APIGatewayV2HTTPRe
 		bodyBytes = decoded
 	}
 
-	req, err := http.NewRequestWithContext(ctx, method, target, bytes.NewReader(bodyBytes))
+	req, err := http.NewRequestWithContext(ctx, method, "/", bytes.NewReader(bodyBytes))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
+	}
+
+	// Build the URL directly instead of letting it be re-parsed from a string:
+	// a path starting with "//" is otherwise read by url.Parse as a network-path
+	// reference, moving the leading segment into URL.Host and emptying URL.Path,
+	// which then makes ServeMux redirect (307) to "/".
+	req.URL = &url.URL{
+		Path:     path,
+		RawQuery: event.RawQueryString,
 	}
 
 	for k, v := range event.Headers {
@@ -207,6 +213,15 @@ func requestFromLambdaEvent(ctx context.Context, event events.APIGatewayV2HTTPRe
 	}
 
 	return req, nil
+}
+
+// collapseSlashes replaces runs of consecutive slashes with a single slash so
+// ServeMux's clean-path redirect never triggers for paths like "//healthz".
+func collapseSlashes(path string) string {
+	for strings.Contains(path, "//") {
+		path = strings.ReplaceAll(path, "//", "/")
+	}
+	return path
 }
 
 func lambdaResponseFromRecorder(rr *httptest.ResponseRecorder) events.APIGatewayV2HTTPResponse {
