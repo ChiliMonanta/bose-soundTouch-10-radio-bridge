@@ -326,12 +326,12 @@ curl http://$SPEAKER_IP:8090/sources
 
 Expected after a successful bridge boot:
 
-- `/info` shows a non-empty `margeAccountUUID`.
+- `/info` shows a `margeAccountUUID` (an empty value has also been observed to work depending on setup).
 - `/sources` contains `LOCAL_INTERNET_RADIO` with status `READY`.
 
 Notes:
 
-- In the working flow, `margeAccountUUID` is assigned automatically during boot.
+- In the working flow, `margeAccountUUID` is assigned automatically during boot, but the speaker has also been observed to work with it left empty.
 - No manual `setMargeAccount` step is required once `margeServerUrl` and `bmxRegistryUrl` are correct.
 - If `LOCAL_INTERNET_RADIO` does not appear immediately after changing URLs, reboot the speaker again and re-check `/info` and `/sources`.
 
@@ -495,9 +495,22 @@ Lambda + ARM64 (Graviton2):
 
 ## 12. Troubleshooting
 
-If the speaker does not call expected endpoints, run these two checks first.
+If the speaker does not call expected endpoints, run these checks first.
 
-1. Verify actual HTTP requests from the speaker to your bridge host:
+1. Confirm the Lambda bridge itself is reachable and healthy:
+
+```sh
+curl "${BRIDGE_HOSTPORT}/healthz" -v
+```
+
+  Expect `HTTP/1.1 200 OK` with body `ok`. Watch for a stray `/` when building
+  the URL (e.g. `${BRIDGE_HOSTPORT}healthz` if `BRIDGE_HOSTPORT` already ends
+  in `/`, or `${BRIDGE_HOSTPORT}/healthz` if it doesn't) — a doubled or missing
+  slash still resolves correctly since the bridge normalizes the path, but it's
+  easy to accidentally hit the wrong path (e.g. a typo like `/healtz`) and get
+  a `{}` fallback response instead of `ok`.
+
+2. Verify actual HTTP requests from the speaker to your bridge host:
 
 ```sh
 sudo tcpdump -ni any -A host "$SPEAKER_IP" and tcp port "${BRIDGE_HOSTPORT##*:}"
@@ -506,7 +519,7 @@ sudo tcpdump -ni any -A host "$SPEAKER_IP" and tcp port "${BRIDGE_HOSTPORT##*:}"
   This shows request lines such as GET /..., POST /... and quickly reveals
   whether the speaker is calling root or specific API paths.
 
-2. Read active URL configuration from ETAP:
+3. Read active URL configuration from ETAP:
 
 ```sh
 printf "getpdo CurrentSystemConfiguration\r\n" | nc -w3 "$SPEAKER_IP" 17000
